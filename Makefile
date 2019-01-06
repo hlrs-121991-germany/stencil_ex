@@ -2,6 +2,9 @@
 
 CC=icc
 
+INC=
+LIB=-qopenmp
+
 CALI_INC=-I${CALIPER_DIR}/include
 CALI_LIB=-L${CALIPER_DIR}/lib64 -lcaliper
 

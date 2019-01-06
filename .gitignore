@@ -1,3 +1,7 @@
+# repo specific
+test_stencil
+
+
 # Prerequisites
 *.d
 

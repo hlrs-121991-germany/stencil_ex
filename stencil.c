@@ -172,17 +172,9 @@ CALI_CXX_MARK_FUNCTION;
 
 }
 
-
-// main function
-int main(int argc, char **argv) {
-
+int test_small_mesh() {
 #ifdef USE_CALI
 CALI_CXX_MARK_FUNCTION;
-cali_id_t thread_attr = cali_create_attribute("thread_id", CALI_TYPE_INT, CALI_ATTR_ASVALUE | CALI_ATTR_SKIP_EVENTS);
-#pragma omp parallel
-{
-cali_set_int(thread_attr, omp_get_thread_num());
-}
 #endif
 
   int err = FALSE;
@@ -207,6 +199,91 @@ cali_set_int(thread_attr, omp_get_thread_num());
   printf("free_mesh...\n");
   free_mesh(mesh_1, x_size, y_size);
   free_mesh(mesh_2, x_size, y_size);
+
+  return err;
+}
+
+
+int run_larger_mesh() {
+#ifdef USE_CALI
+CALI_CXX_MARK_FUNCTION;
+#endif
+
+  int err = FALSE;
+
+  struct Mesh **mesh_1 = NULL;
+  struct Mesh **mesh_2 = NULL;
+  int x_size = 10000;
+  int y_size = 20000;
+  double time = 0.0;
+  double step = 1.0;
+  double time_stop = 10.0;
+
+  double wall_tot_start, wall_tot_end;
+  double wall_init_start, wall_init_end;
+  double wall_step_start, wall_step_end;
+  double wall_free_start, wall_free_end;
+
+  wall_tot_start = omp_get_wtime();
+  wall_init_start = omp_get_wtime();
+  printf("init_mesh......."); fflush(stdout);
+  err = err | init_mesh(&mesh_1, x_size, y_size);
+  err = err | init_mesh(&mesh_2, x_size, y_size);
+  if(mesh_1 == NULL) return 1;
+  if(mesh_2 == NULL) return 1;
+  wall_init_end = omp_get_wtime();
+  printf("%fs\n", (wall_init_end - wall_init_start));
+
+  while(time < time_stop) {
+
+    printf("timestep %.2f...", time); fflush(stdout);
+    wall_step_start = omp_get_wtime();
+    do_timestep(mesh_1, mesh_2, x_size, y_size, time);
+    time += step;
+    wall_step_end = omp_get_wtime();
+    printf("%fs\n", (wall_step_end - wall_step_start));
+
+    printf("timestep %.2f...", time); fflush(stdout);
+    wall_step_start = omp_get_wtime();
+    do_timestep(mesh_2, mesh_1, x_size, y_size, time);
+    time += step;
+    wall_step_end = omp_get_wtime();
+    printf("%fs\n", (wall_step_end - wall_step_start));
+
+  }
+
+
+  printf("free_mesh.......\n"); fflush(stdout);
+  wall_free_start = omp_get_wtime();
+  free_mesh(mesh_1, x_size, y_size);
+  free_mesh(mesh_2, x_size, y_size);
+  wall_free_end = omp_get_wtime();
+  printf("%fs\n", (wall_free_end - wall_free_start));
+
+  wall_tot_end = omp_get_wtime();
+  printf("\n total time: %fs\n", (wall_tot_end - wall_tot_start));
+
+  return err;
+}
+
+
+// main function
+int main(int argc, char **argv) {
+
+#ifdef USE_CALI
+CALI_CXX_MARK_FUNCTION;
+cali_id_t thread_attr = cali_create_attribute("thread_id", CALI_TYPE_INT, CALI_ATTR_ASVALUE | CALI_ATTR_SKIP_EVENTS);
+#pragma omp parallel
+{
+cali_set_int(thread_attr, omp_get_thread_num());
+}
+#endif
+
+  int err = FALSE;
+
+  err = err | test_small_mesh();
+  printf("\n\n");
+  err = err | run_larger_mesh();
 
   return err;
 }
