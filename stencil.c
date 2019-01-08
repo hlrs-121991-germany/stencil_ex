@@ -23,6 +23,28 @@
 #define X 0
 #define Y 1
 
+#ifndef X_SIZE
+#define X_SIZE 10000
+#endif
+
+#ifndef Y_SIZE
+#define Y_SIZE 20000
+#endif
+
+#ifndef TIME
+#define TIME 0.0
+#endif
+
+#ifndef STEP
+#define STEP 1.0
+#endif
+
+#ifndef TIME_STOP
+#define TIME_STOP 10.0
+#endif
+
+
+
 // create and fill the mesh with starting values
 int init_mesh(struct Mesh ***mesh, int x_size, int y_size) {
 #ifdef USE_CALI
@@ -204,7 +226,7 @@ CALI_CXX_MARK_FUNCTION;
 }
 
 
-int run_larger_mesh() {
+int run_custom_mesh(int x_size, int y_size, double time, double step, double time_stop) {
 #ifdef USE_CALI
 CALI_CXX_MARK_FUNCTION;
 #endif
@@ -213,16 +235,20 @@ CALI_CXX_MARK_FUNCTION;
 
   struct Mesh **mesh_1 = NULL;
   struct Mesh **mesh_2 = NULL;
-  int x_size = 10000;
-  int y_size = 20000;
-  double time = 0.0;
-  double step = 1.0;
-  double time_stop = 10.0;
 
   double wall_tot_start, wall_tot_end;
   double wall_init_start, wall_init_end;
   double wall_step_start, wall_step_end;
   double wall_free_start, wall_free_end;
+
+
+  printf("\n\nRunning new Stencil with \n\
+    x_size     = %d \n\
+    y_size     = %d \n\
+    start time = %f \n\
+    time step  = %f \n\
+    end time   = %f \n\n",
+    x_size, y_size, time, step, time_stop);
 
   wall_tot_start = omp_get_wtime();
   wall_init_start = omp_get_wtime();
@@ -281,9 +307,9 @@ cali_set_int(thread_attr, omp_get_thread_num());
 
   int err = FALSE;
 
-  err = err | test_small_mesh();
-  printf("\n\n");
-  err = err | run_larger_mesh();
+  // err = err | test_small_mesh();
+  // printf("\n\n");
+  err = err | run_custom_mesh(X_SIZE, Y_SIZE, TIME, STEP, TIME_STOP);
 
   return err;
 }
