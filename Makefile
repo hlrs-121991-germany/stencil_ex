@@ -5,7 +5,7 @@ CC=icc
 INC=
 LIB=-qopenmp
 
-X_SIZE=10000
+X_SIZE=50000
 Y_SIZE=20000
 
 VARS=-DX_SIZE=${X_SIZE} 

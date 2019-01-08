@@ -1,6 +1,6 @@
 /*
  * Simple Stencil example
- * Main program example
+ * Main program example with openmp thread parallelism
  *
  * Brian J Gravelle
  * gravelle@cs.uoregon.edu
@@ -84,6 +84,21 @@ CALI_CXX_MARK_FUNCTION;
   return err;
 }
 
+// liberate the memory
+void free_mesh(struct Mesh **mesh, int x_size, int y_size) {
+#ifdef USE_CALI
+CALI_CXX_MARK_FUNCTION;
+#endif
+
+  int i;
+
+  for (i = 0; i < x_size; ++i) {
+    free(mesh[i]);
+  }
+  free(mesh);
+
+}
+
 // for point (x,y) in mesh get the list of neighbors 
 void get_neighbors(int x_size, int y_size, int x, int y, int neighbors[9][2]) {
 #ifdef USE_CALI
@@ -116,10 +131,10 @@ void do_timestep(struct Mesh **mesh, struct Mesh **new_mesh, int x_size, int y_s
 CALI_CXX_MARK_FUNCTION;
 #endif
 
-  int neighbors[9][2];
 
   int _x, _y, n;
 
+  #pragma simd
   for (_x = 0; _x < x_size; _x++) {
     for (_y = 0; _y < y_size; _y++) {
       new_mesh[_x][_y].heat   = 0;
@@ -128,8 +143,11 @@ CALI_CXX_MARK_FUNCTION;
     }
   }
 
+  #pragma omp parallel for private(_y, n)
   for (_x = 0; _x < x_size; _x++) {
     for (_y = 0; _y < y_size; _y++) {
+
+      int neighbors[9][2];
 
       get_neighbors(x_size, y_size, _x, _y, neighbors);
 
@@ -138,6 +156,7 @@ CALI_CXX_MARK_FUNCTION;
       }
       new_mesh[_x][_y].heat /= 9;
 
+      #pragma simd
       for(n = 0; n < 9; n++) {
         new_mesh[neighbors[n][X]][neighbors[n][Y]].volume += mesh[_x][_y].volume/9;
       }
@@ -145,6 +164,7 @@ CALI_CXX_MARK_FUNCTION;
     }
   }
 
+  #pragma omp parallel for private(_y)
   for (_x = 0; _x < x_size; _x++)
     for (_y = 0; _y < y_size; _y++)  
       new_mesh[_x][_y].jff = new_mesh[_x][_y].heat + new_mesh[_x][_y].volume;
@@ -176,21 +196,6 @@ CALI_CXX_MARK_FUNCTION;
     }
     printf("\n\n");
   }
-
-}
-
-// liberate the memory
-void free_mesh(struct Mesh **mesh, int x_size, int y_size) {
-#ifdef USE_CALI
-CALI_CXX_MARK_FUNCTION;
-#endif
-
-  int i;
-
-  for (i = 0; i < x_size; ++i) {
-    free(mesh[i]);
-  }
-  free(mesh);
 
 }
 
