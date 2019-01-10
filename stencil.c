@@ -126,7 +126,7 @@ CALI_CXX_MARK_FUNCTION;
     for (_y = 0; _y < y_size; _y++) {
       new_mesh[_x][_y].heat   = 0;
       new_mesh[_x][_y].volume = 0;
-      new_mesh[_x][_y].fancy  = 0;
+      new_mesh[_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
     }
   }
 
