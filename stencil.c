@@ -131,6 +131,9 @@ void do_timestep(struct Mesh **mesh, struct Mesh **new_mesh, int x_size, int y_s
 CALI_CXX_MARK_FUNCTION;
 #endif
 
+  int neighbors[9][2];
+  double dt2 = dt*dt;
+  double C = 0.25;
 
   int _x, _y, n;
   double dt2 = dt*dt;
@@ -142,6 +145,7 @@ CALI_CXX_MARK_FUNCTION;
       new_mesh[_x][_y].heat   = 0;
       new_mesh[_x][_y].volume = 0;
       new_mesh[_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
+
     }
   }
 
@@ -163,7 +167,6 @@ CALI_CXX_MARK_FUNCTION;
         new_mesh[neighbors[n][X]][neighbors[n][Y]].volume += mesh[_x][_y].volume/9;
       }
 
-
       for(n = 0; n < 9; n++){
         new_mesh[neighbors[n][X]][neighbors[n][Y]].fancy += \
         -2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy * C;
@@ -172,7 +175,7 @@ CALI_CXX_MARK_FUNCTION;
     }
   }
 
-}
+} // do time step
 
 // print the mesh
 void print_mesh(struct Mesh **mesh, int x_size, int y_size) {

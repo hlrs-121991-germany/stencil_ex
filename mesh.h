@@ -18,7 +18,7 @@ struct Mesh
 
   double heat;    // update to the average to itself and the neighbors
   double volume;  // divide the vaule amoung itself and neighbors
-  double fancy;   // mimics a 2nd order PDE
+  double fancy;   // just for fun add the heat and volume
   
 };
 
