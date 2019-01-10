@@ -73,7 +73,7 @@ CALI_CXX_MARK_FUNCTION;
     for (j = 0; j < y_size; j++) {
       _mesh[i][j].heat   = H;
       _mesh[i][j].volume = V;
-      _mesh[i][j].jff    = H + V;
+      _mesh[i][j].fancy  = H + V;
       V += 1000;
     }
     H += 100;
@@ -126,20 +126,22 @@ CALI_CXX_MARK_FUNCTION;
 }
 
 // perform one iteration of the timestep
-void do_timestep(struct Mesh **mesh, struct Mesh **new_mesh, int x_size, int y_size, double time) {
+void do_timestep(struct Mesh **mesh, struct Mesh **new_mesh, int x_size, int y_size, double time, double dt) {
 #ifdef USE_CALI
 CALI_CXX_MARK_FUNCTION;
 #endif
 
 
   int _x, _y, n;
+  double dt2 = dt*dt;
+  double C = 0.25;
 
   #pragma simd
   for (_x = 0; _x < x_size; _x++) {
     for (_y = 0; _y < y_size; _y++) {
       new_mesh[_x][_y].heat   = 0;
       new_mesh[_x][_y].volume = 0;
-      new_mesh[_x][_y].jff    = 0;
+      new_mesh[_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
     }
   }
 
@@ -161,13 +163,14 @@ CALI_CXX_MARK_FUNCTION;
         new_mesh[neighbors[n][X]][neighbors[n][Y]].volume += mesh[_x][_y].volume/9;
       }
 
+
+      for(n = 0; n < 9; n++){
+        new_mesh[neighbors[n][X]][neighbors[n][Y]].fancy += \
+        -2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy * C;
+      }
+
     }
   }
-
-  #pragma omp parallel for private(_y)
-  for (_x = 0; _x < x_size; _x++)
-    for (_y = 0; _y < y_size; _y++)  
-      new_mesh[_x][_y].jff = new_mesh[_x][_y].heat + new_mesh[_x][_y].volume;
 
 }
 
@@ -192,7 +195,7 @@ CALI_CXX_MARK_FUNCTION;
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2f", mesh[i][j].jff);
+      printf("%10.2f", mesh[i][j].fancy);
     }
     printf("\n\n");
   }
@@ -220,7 +223,7 @@ CALI_CXX_MARK_FUNCTION;
   printf("print_mesh...\n");
   print_mesh(mesh_1, x_size, y_size);
   printf("do_timestep...\n");
-  do_timestep(mesh_1, mesh_2, x_size, y_size, time);
+  do_timestep(mesh_1, mesh_2, x_size, y_size, time, 1.0);
   printf("print_mesh...\n");
   print_mesh(mesh_2, x_size, y_size);
   printf("free_mesh...\n");
@@ -269,14 +272,14 @@ CALI_CXX_MARK_FUNCTION;
 
     printf("timestep %.2f...", time); fflush(stdout);
     wall_step_start = omp_get_wtime();
-    do_timestep(mesh_1, mesh_2, x_size, y_size, time);
+    do_timestep(mesh_1, mesh_2, x_size, y_size, time, step);
     time += step;
     wall_step_end = omp_get_wtime();
     printf("%fs\n", (wall_step_end - wall_step_start));
 
     printf("timestep %.2f...", time); fflush(stdout);
     wall_step_start = omp_get_wtime();
-    do_timestep(mesh_2, mesh_1, x_size, y_size, time);
+    do_timestep(mesh_2, mesh_1, x_size, y_size, time, step);
     time += step;
     wall_step_end = omp_get_wtime();
     printf("%fs\n", (wall_step_end - wall_step_start));

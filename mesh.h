@@ -18,7 +18,7 @@ struct Mesh
 
   double heat;    // update to the average to itself and the neighbors
   double volume;  // divide the vaule amoung itself and neighbors
-  double jff;     // just for fun add the heat and volume
+  double fancy;   // mimics a 2nd order PDE
   
 };
 
@@ -29,7 +29,7 @@ int init_mesh(struct Mesh ***mesh, int x_size, int y_size);
 void get_neighbors(int x_size, int y_size, int x, int y, int neighbors[9][2]);
 
 // perform one iteration of the timestep
-void do_timestep(struct Mesh **mesh, struct Mesh **new_mesh, int x_size, int y_size, double time);
+void do_timestep(struct Mesh **mesh, struct Mesh **new_mesh, int x_size, int y_size, double time, double dt);
 
 // print a grid of the mesh
 void print_mesh(struct Mesh **mesh, int x_size, int y_size);
