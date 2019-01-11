@@ -78,6 +78,10 @@ CALI_CXX_MARK_FUNCTION;
   return err;
 }
 
+double pythag(double x1, double y1, double x2, double y2) {
+  return (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
+}
+
 // perform one iteration of the timestep
 void do_timestep(struct Mesh **mesh, struct Mesh **new_mesh, int x_size, int y_size, double time, double dt) {
 #ifdef USE_CALI
@@ -113,8 +117,8 @@ CALI_CXX_MARK_FUNCTION;
       }
 
       for(n = 0; n < 9; n++){
-        new_mesh[neighbors[n][X]][neighbors[n][Y]].fancy += \
-        -2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy * C;
+        double dist2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
+        new_mesh[_x][_y].fancy += -2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy / (dist2*C);
       }
 
     }
