@@ -7,6 +7,9 @@
  *
  */
 
+#ifndef __MESH_H__
+#define __MESH_H__
+
 // point for each mesh location
 // contains three "physical values"
 //   - desciptions explain behavior on each time step
@@ -22,11 +25,19 @@ struct Mesh
   
 };
 
+
+#define TRUE  1
+#define FALSE 0
+
+#define X 0
+#define Y 1
+
+
 // create and fill the mesh with starting values
 int init_mesh(struct Mesh ***mesh, int x_size, int y_size);
 
 // for point (x,y) in mesh get the list of neighbors 
-void get_neighbors(int x_size, int y_size, int x, int y, int neighbors[9][2]);
+int get_neighbors(int x_size, int y_size, int x, int y, int neighbors[9][2]);
 
 // perform one iteration of the timestep
 void do_timestep(struct Mesh **mesh, struct Mesh **new_mesh, int x_size, int y_size, double time, double dt);
@@ -39,5 +50,6 @@ void free_mesh(struct Mesh **mesh, int x_size, int y_size);
 
 
 
+#endif
 
 

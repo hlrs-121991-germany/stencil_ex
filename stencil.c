@@ -17,12 +17,6 @@
 #include <stdio.h>
 #include <omp.h>
 
-#define TRUE  1
-#define FALSE 0
-
-#define X 0
-#define Y 1
-
 #ifndef X_SIZE
 #define X_SIZE 10000
 #endif
@@ -99,30 +93,8 @@ CALI_CXX_MARK_FUNCTION;
 
 }
 
-// for point (x,y) in mesh get the list of neighbors 
-void get_neighbors(int x_size, int y_size, int x, int y, int neighbors[9][2]) {
-#ifdef USE_CALI
-CALI_CXX_MARK_FUNCTION;
-#endif
-
-  int _x, _y, n;
-
-  n = 0;
-  for (_x = -1; _x <= 1; _x++) {
-    for (_y = -1; _y <= 1; _y++) {
-
-      neighbors[n][X] = x + _x;
-      neighbors[n][Y] = y + _y;
-
-      if((neighbors[n][X] < 0) || (neighbors[n][X] >= x_size) )
-        neighbors[n][X] = x;      
-      if((neighbors[n][Y] < 0) || (neighbors[n][Y] >= y_size) )
-        neighbors[n][Y] = y;
-
-      n++;
-    }
-  }
-
+double pythag(double x1, double y1, double x2, double y2) {
+  return (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
 }
 
 // perform one iteration of the timestep
@@ -136,8 +108,6 @@ CALI_CXX_MARK_FUNCTION;
   double C = 0.25;
 
   int _x, _y, n;
-  double dt2 = dt*dt;
-  double C = 0.25;
 
   #pragma simd
   for (_x = 0; _x < x_size; _x++) {
@@ -145,7 +115,6 @@ CALI_CXX_MARK_FUNCTION;
       new_mesh[_x][_y].heat   = 0;
       new_mesh[_x][_y].volume = 0;
       new_mesh[_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
-
     }
   }
 
@@ -168,8 +137,8 @@ CALI_CXX_MARK_FUNCTION;
       }
 
       for(n = 0; n < 9; n++){
-        new_mesh[neighbors[n][X]][neighbors[n][Y]].fancy += \
-        -2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy * C;
+        double dist2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
+        new_mesh[_x][_y].fancy += -2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy / (dist2*C);
       }
 
     }

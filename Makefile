@@ -17,7 +17,7 @@ CALI_LIB=-L${CALIPER_DIR}/lib64 -lcaliper
 all: stencil
 
 stencil: stencil.c
-	${CC} -g -o test_stencil ${INC} stencil.c ${LIB} ${VARS}
+	${CC} -g -o test_stencil ${INC} stencil.c stencil_patterns.c ${LIB} ${VARS}
 
 clean:
 	rm -f *.out test_stencil *.o *.cali *.json
