@@ -33,11 +33,23 @@ struct Mesh
 #define Y 1
 
 
+#if STENCIL_TYPE == 0
+#define NUM_NEIGHBORS 9
+
+#elif STENCIL_TYPE == 1
+#define NUM_NEIGHBORS 5
+
+#elif STENCIL_TYPE == 2
+#define NUM_NEIGHBORS 9
+
+#endif
+
+
 // create and fill the mesh with starting values
 int init_mesh(struct Mesh ***mesh, int x_size, int y_size);
 
 // for point (x,y) in mesh get the list of neighbors 
-int get_neighbors(int x_size, int y_size, int x, int y, int neighbors[9][2]);
+int get_neighbors(int x_size, int y_size, int x, int y, int neighbors[NUM_NEIGHBORS][2]);
 
 // perform one iteration of the timestep
 void do_timestep(struct Mesh **mesh, struct Mesh **new_mesh, int x_size, int y_size, double time, double dt);
