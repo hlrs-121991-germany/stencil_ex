@@ -23,10 +23,11 @@
 #endif
 
 #if STENCIL_TYPE == 0
+// NUM_NEIGHBORS = 9
 
 // for point (x,y) in mesh get the list of neighbors 
 // returns the number of neighbors
-int get_neighbors(int x_size, int y_size, int x, int y, int neighbors[9][2]) {
+int get_neighbors(int x_size, int y_size, int x, int y, int neighbors[NUM_NEIGHBORS][2]) {
 #ifdef USE_CALI
 CALI_CXX_MARK_FUNCTION;
 #endif
@@ -54,9 +55,11 @@ CALI_CXX_MARK_FUNCTION;
 
 
 #elif STENCIL_TYPE == 1
+// NUM_NEIGHBORS = 5
+
 // for point (x,y) in mesh get the list of neighbors 
 // returns the number of neighbors
-int get_neighbors(int x_size, int y_size, int x, int y, int neighbors[9][2]) {
+int get_neighbors(int x_size, int y_size, int x, int y, int neighbors[NUM_NEIGHBORS][2]) {
 #ifdef USE_CALI
 CALI_CXX_MARK_FUNCTION;
 #endif
@@ -66,19 +69,75 @@ CALI_CXX_MARK_FUNCTION;
   for (_x = -1; _x <= 1; _x++) {
 
     neighbors[n][X] = x + _x;
-    if((neighbors[n][X] < 0) || (neighbors[n][X] >= x_size) )
+    neighbors[n][Y] = y;
+    if((neighbors[n][X] < 0) || (neighbors[n][X] >= x_size) ){
       neighbors[n][X] = x;     
-
+      neighbors[n][Y] = y;
+    }
     n++;
+
+    if(n > NUM_NEIGHBORS){
+      printf("ERROR getting neighbors :(\n");
+    }
   }
 
   for (_y = -1; _y <= 1; _y++) {
 
-    neighbors[n][Y] = y + _y;
-    if((neighbors[n][Y] < 0) || (neighbors[n][Y] >= y_size) )
-      neighbors[n][Y] = y;
+    if(_y != 0) { // don't double up on the center point
+      neighbors[n][X] = x;
+      neighbors[n][Y] = y + _y;
+      if((neighbors[n][Y] < 0) || (neighbors[n][Y] >= y_size) ) {
+        neighbors[n][X] = x;
+        neighbors[n][Y] = y;
+      }
+      n++;
+    } 
 
+    if(n > NUM_NEIGHBORS){
+      printf("ERROR getting neighbors\n");
+    }
+  }
+
+
+  return n;
+}
+
+#elif STENCIL_TYPE == 2
+// NUM_NEIGHBORS = 9
+
+// for point (x,y) in mesh get the list of neighbors 
+// returns the number of neighbors
+int get_neighbors(int x_size, int y_size, int x, int y, int neighbors[NUM_NEIGHBORS][2]) {
+#ifdef USE_CALI
+CALI_CXX_MARK_FUNCTION;
+#endif
+
+  int _x, _y, n=0;
+
+  for (_x = -0; _x <= 0; _x++) {
+
+    neighbors[n][X] = x + _x;
+    neighbors[n][Y] = y;
+    if((neighbors[n][X] < 0) || (neighbors[n][X] >= x_size) ){
+      neighbors[n][X] = x;     
+      neighbors[n][Y] = y;
+    }
     n++;
+
+  }
+
+  for (_y = -0; _y <= 0; _y++) {
+
+    if(_y != 0) { // don't double up on the center point
+      neighbors[n][X] = x;
+      neighbors[n][Y] = y + _y;
+      if((neighbors[n][Y] < 0) || (neighbors[n][Y] >= y_size) ) {
+        neighbors[n][X] = x;
+        neighbors[n][Y] = y;
+      }
+      n++;  
+    }
+
   }
 
 
@@ -86,3 +145,4 @@ CALI_CXX_MARK_FUNCTION;
 }
 
 #endif
+

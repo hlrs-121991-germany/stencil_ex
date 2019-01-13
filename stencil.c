@@ -122,21 +122,21 @@ CALI_CXX_MARK_FUNCTION;
   for (_x = 0; _x < x_size; _x++) {
     for (_y = 0; _y < y_size; _y++) {
 
-      int neighbors[9][2];
+      int neighbors[NUM_NEIGHBORS][2];
 
       get_neighbors(x_size, y_size, _x, _y, neighbors);
 
-      for(n = 0; n < 9; n++) {
+      for(n = 0; n < NUM_NEIGHBORS; n++) {
         new_mesh[_x][_y].heat += mesh[neighbors[n][X]][neighbors[n][Y]].heat;
       }
-      new_mesh[_x][_y].heat /= 9;
+      new_mesh[_x][_y].heat /= NUM_NEIGHBORS;
 
       #pragma simd
-      for(n = 0; n < 9; n++) {
-        new_mesh[neighbors[n][X]][neighbors[n][Y]].volume += mesh[_x][_y].volume/9;
+      for(n = 0; n < NUM_NEIGHBORS; n++) {
+        new_mesh[neighbors[n][X]][neighbors[n][Y]].volume += mesh[_x][_y].volume/NUM_NEIGHBORS;
       }
 
-      for(n = 0; n < 9; n++){
+      for(n = 0; n < NUM_NEIGHBORS; n++){
         double dist2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
         new_mesh[_x][_y].fancy += -2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy / (dist2*C);
       }
