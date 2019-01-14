@@ -67,7 +67,7 @@ CALI_CXX_MARK_FUNCTION;
     for (j = 0; j < y_size; j++) {
       _mesh[i][j].heat   = H;
       _mesh[i][j].volume = V;
-      _mesh[i][j].fancy  = H + V;
+      _mesh[i][j].fancy  = i*j;
       V += 1000;
     }
     H += 100;
@@ -83,44 +83,71 @@ double pythag(double x1, double y1, double x2, double y2) {
 }
 
 // perform one iteration of the timestep
-void do_timestep(struct Mesh **mesh, struct Mesh **new_mesh, int x_size, int y_size, double time, double dt) {
+void do_timestep(struct Mesh **mesh, struct Mesh **temp_mesh, int x_size, int y_size, double time, double dt) {
 #ifdef USE_CALI
 CALI_CXX_MARK_FUNCTION;
 #endif
 
   int neighbors[NUM_NEIGHBORS][2];
   double dt2 = dt*dt;
-  double C = 0.25;
+  double C = 0.25, dist2 = 1.0;
 
-  int _x, _y, n;
+  int _x, _y, n, j;
+
+  // for (_x = 0; _x < TEMP_ROWS; _x++) {
+  //   for (_y = 0; _y < y_size; _y++) {
+  //     temp_mesh[_x][_y].heat   = 0;
+  //     temp_mesh[_x][_y].volume = 0;
+  //     temp_mesh[_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
+  //   }
+  // }
 
   for (_x = 0; _x < x_size; _x++) {
-    for (_y = 0; _y < y_size; _y++) {
-      new_mesh[_x][_y].heat   = 0;
-      new_mesh[_x][_y].volume = 0;
-      new_mesh[_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
+
+    int temp_x = _x % TEMP_ROWS;
+    
+    if((_x - TEMP_ROWS) >= 0) {
+      for (_y = 0; _y < y_size; _y++) {
+        mesh[_x - TEMP_ROWS][_y].heat   = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].heat;
+        mesh[_x - TEMP_ROWS][_y].volume = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].volume;
+        mesh[_x - TEMP_ROWS][_y].fancy  = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].fancy;
+      }
     }
-  }
 
-  for (_x = 0; _x < x_size; _x++) {
+    for (_y = 0; _y < y_size; _y++) {
+      temp_mesh[temp_x][_y].heat   = 0;
+      temp_mesh[temp_x][_y].volume = 0;
+      temp_mesh[temp_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
+    }
+
     for (_y = 0; _y < y_size; _y++) {
 
       get_neighbors(x_size, y_size, _x, _y, neighbors);
 
       for(n = 0; n < NUM_NEIGHBORS; n++) {
-        new_mesh[_x][_y].heat += mesh[neighbors[n][X]][neighbors[n][Y]].heat;
+        temp_mesh[temp_x][_y].heat += mesh[neighbors[n][X]][neighbors[n][Y]].heat;
       }
-      new_mesh[_x][_y].heat /= 9;
+      temp_mesh[temp_x][_y].heat /= 9;
 
       for(n = 0; n < NUM_NEIGHBORS; n++) {
-        new_mesh[neighbors[n][X]][neighbors[n][Y]].volume += mesh[_x][_y].volume/NUM_NEIGHBORS;
+        temp_mesh[temp_x][_y].volume += mesh[neighbors[n][X]][neighbors[n][Y]].volume/NUM_NEIGHBORS;
       }
 
       for(n = 0; n < NUM_NEIGHBORS; n++){
-        double dist2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
-        new_mesh[_x][_y].fancy += -2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy / (dist2*C);
+        dist2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
+        temp_mesh[temp_x][_y].fancy += (-2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy) / ((dist2 + 1.0) * C);
       }
 
+    }
+
+
+  } // _x loop
+
+  for(_x; _x < x_size + TEMP_ROWS; _x++) {
+    for (_y = 0; _y < y_size; _y++) {
+      mesh[_x - TEMP_ROWS][_y].heat   = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].heat;
+      mesh[_x - TEMP_ROWS][_y].volume = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].volume;
+      mesh[_x - TEMP_ROWS][_y].fancy  = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].fancy;
     }
   }
 
@@ -135,7 +162,7 @@ CALI_CXX_MARK_FUNCTION;
   int i, j;
 
   for (i = 0; i < x_size; i++) {
-
+    printf("x = %d\n", i);
     for (j = 0; j < y_size; j++) {
       printf("%10.2f", mesh[i][j].heat);
     }
@@ -184,7 +211,7 @@ CALI_CXX_MARK_FUNCTION;
 
   printf("init_mesh...\n");
   err = err | init_mesh(&mesh_1, x_size, y_size);
-  err = err | init_mesh(&mesh_2, x_size, y_size);
+  err = err | init_mesh(&mesh_2, TEMP_ROWS, y_size);
   if(mesh_1 == NULL) return 1;
   if(mesh_2 == NULL) return 1;
   printf("print_mesh...\n");
@@ -192,10 +219,10 @@ CALI_CXX_MARK_FUNCTION;
   printf("do_timestep...\n");
   do_timestep(mesh_1, mesh_2, x_size, y_size, time, 1.0);
   printf("print_mesh...\n");
-  print_mesh(mesh_2, x_size, y_size);
+  print_mesh(mesh_1, x_size, y_size);
   printf("free_mesh...\n");
   free_mesh(mesh_1, x_size, y_size);
-  free_mesh(mesh_2, x_size, y_size);
+  free_mesh(mesh_2, TEMP_ROWS, y_size);
 
   return err;
 }
@@ -208,8 +235,8 @@ CALI_CXX_MARK_FUNCTION;
 
   int err = FALSE;
 
-  struct Mesh **mesh_1 = NULL;
-  struct Mesh **mesh_2 = NULL;
+  struct Mesh **main_mesh = NULL;
+  struct Mesh **temp_mesh = NULL;
 
   double wall_tot_start, wall_tot_end;
   double wall_init_start, wall_init_end;
@@ -228,10 +255,10 @@ CALI_CXX_MARK_FUNCTION;
   wall_tot_start = omp_get_wtime();
   wall_init_start = omp_get_wtime();
   printf("init_mesh......."); fflush(stdout);
-  err = err | init_mesh(&mesh_1, x_size, y_size);
-  err = err | init_mesh(&mesh_2, x_size, y_size);
-  if(mesh_1 == NULL) return 1;
-  if(mesh_2 == NULL) return 1;
+  err = err | init_mesh(&main_mesh, x_size, y_size);
+  err = err | init_mesh(&temp_mesh, TEMP_ROWS, y_size);
+  if(main_mesh == NULL) return 1;
+  if(temp_mesh == NULL) return 1;
   wall_init_end = omp_get_wtime();
   printf("%fs\n", (wall_init_end - wall_init_start));
 
@@ -239,14 +266,7 @@ CALI_CXX_MARK_FUNCTION;
 
     printf("timestep %.2f...", time); fflush(stdout);
     wall_step_start = omp_get_wtime();
-    do_timestep(mesh_1, mesh_2, x_size, y_size, time, step);
-    time += step;
-    wall_step_end = omp_get_wtime();
-    printf("%fs\n", (wall_step_end - wall_step_start));
-
-    printf("timestep %.2f...", time); fflush(stdout);
-    wall_step_start = omp_get_wtime();
-    do_timestep(mesh_2, mesh_1, x_size, y_size, time, step);
+    do_timestep(main_mesh, temp_mesh, x_size, y_size, time, step);
     time += step;
     wall_step_end = omp_get_wtime();
     printf("%fs\n", (wall_step_end - wall_step_start));
@@ -256,8 +276,8 @@ CALI_CXX_MARK_FUNCTION;
 
   printf("free_mesh.......\n"); fflush(stdout);
   wall_free_start = omp_get_wtime();
-  free_mesh(mesh_1, x_size, y_size);
-  free_mesh(mesh_2, x_size, y_size);
+  free_mesh(main_mesh, x_size, y_size);
+  free_mesh(temp_mesh, TEMP_ROWS, y_size);
   wall_free_end = omp_get_wtime();
   printf("%fs\n", (wall_free_end - wall_free_start));
 
