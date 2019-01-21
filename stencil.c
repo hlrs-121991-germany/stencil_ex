@@ -194,7 +194,10 @@ CALI_CXX_MARK_FUNCTION;
 
 
     #pragma omp critical
-    row_status[_x] += 1;
+    for (t = 1; t < TEMP_ROWS-1; t++) {
+      if((_x-t) >= 0) 
+        row_status[_x-t] += 1;
+    }
 
   } // _x loop
 
