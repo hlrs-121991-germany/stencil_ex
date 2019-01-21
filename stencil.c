@@ -164,21 +164,48 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     printf("x = %d\n", i);
     for (j = 0; j < y_size; j++) {
-      printf("%10.2f", mesh[i][j].heat);
+      printf("%10.2e ", mesh[i][j].heat);
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2f", mesh[i][j].volume);
+      printf("%10.2e ", mesh[i][j].volume);
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2f", mesh[i][j].fancy);
+      printf("%10.2e ", mesh[i][j].fancy);
     }
     printf("\n\n");
   }
 
+}
+
+// print the mesh to file
+void output_mesh(FILE* file, struct Mesh **mesh, int x_size, int y_size) {
+#ifdef USE_CALI
+CALI_CXX_MARK_FUNCTION;
+#endif
+
+  int i, j;
+
+  for (i = 0; i < x_size; i++) {
+    fprintf(file, "x = %d\n", i);
+    for (j = 0; j < y_size; j++) {
+      fprintf(file, "%10.2e ", mesh[i][j].heat);
+    }
+    fprintf(file, "\n");
+
+    for (j = 0; j < y_size; j++) {
+      fprintf(file, "%10.2e ", mesh[i][j].volume);
+    }
+    fprintf(file, "\n");
+
+    for (j = 0; j < y_size; j++) {
+      fprintf(file, "%10.2e ", mesh[i][j].fancy);
+    }
+    fprintf(file, "\n\n");
+  }
 }
 
 // liberate the memory
@@ -262,6 +289,21 @@ CALI_CXX_MARK_FUNCTION;
   wall_init_end = omp_get_wtime();
   printf("%fs\n", (wall_init_end - wall_init_start));
 
+#ifdef DO_IO
+  printf("output to file....."); fflush(stdout);
+  double io_start = omp_get_wtime();
+  FILE* file = fopen(FILE_NAME, "w+");
+  fprintf(file, "\n\nRunning new Stencil with \n\
+    x_size     = %d \n\
+    y_size     = %d \n\
+    start time = %f \n\
+    time step  = %f \n\
+    end time   = %f \n\n",
+    x_size, y_size, time, step, time_stop);
+  output_mesh(file, main_mesh, x_size, y_size);
+  printf("%fs\n", (omp_get_wtime() - io_start));
+#endif
+
   while(time < time_stop) {
 
     printf("timestep %.2f...", time); fflush(stdout);
@@ -273,6 +315,15 @@ CALI_CXX_MARK_FUNCTION;
 
   }
 
+#ifdef DO_IO
+  io_start = omp_get_wtime();
+  printf("output to file....."); fflush(stdout);
+  fprintf(file, "\n\n");
+  output_mesh(file, main_mesh, x_size, y_size);
+  fprintf(file, "\n\n");
+  fclose(file);
+  printf("%fs\n", (omp_get_wtime() - io_start));
+#endif
 
   printf("free_mesh.......\n"); fflush(stdout);
   wall_free_start = omp_get_wtime();
