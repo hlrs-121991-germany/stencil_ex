@@ -211,17 +211,17 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     printf("x = %d\n", i);
     for (j = 0; j < y_size; j++) {
-      printf("%10.2f", mesh[i][j].heat);
+      printf("%10.2e ", mesh[i][j].heat);
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2f", mesh[i][j].volume);
+      printf("%10.2e ", mesh[i][j].volume);
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2f", mesh[i][j].fancy);
+      printf("%10.2e ", mesh[i][j].fancy);
     }
     printf("\n\n");
   }
@@ -240,17 +240,17 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     fprintf(file, "x = %d\n", i);
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2f", mesh[i][j].heat);
+      fprintf(file, "%10.2e", mesh[i][j].heat);
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2f", mesh[i][j].volume);
+      fprintf(file, "%10.2e", mesh[i][j].volume);
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2f", mesh[i][j].fancy);
+      fprintf(file, "%10.2e", mesh[i][j].fancy);
     }
     fprintf(file, "\n\n");
   }
@@ -345,11 +345,10 @@ CALI_CXX_MARK_FUNCTION;
     y_size     = %d \n\
     start time = %f \n\
     time step  = %f \n\
-    end time   = %f \n\
-    num thrs   = %d \n\n",
-    x_size, y_size, time, step, time_stop, num_thr);
+    end time   = %f \n\n",
+    x_size, y_size, time, step, time_stop);
   output_mesh(file, main_mesh, x_size, y_size);
-  printf("%fs\n", (omp_get_wtime() - wall_init_start));
+  printf("%fs\n", (omp_get_wtime() - io_start));
 #endif
 
   while(time < time_stop) {
@@ -370,7 +369,7 @@ CALI_CXX_MARK_FUNCTION;
   output_mesh(file, main_mesh, x_size, y_size);
   fprintf(file, "\n\n");
   fclose(file);
-  printf("%fs\n", (omp_get_wtime() - wall_init_start));
+  printf("%fs\n", (omp_get_wtime() - io_start));
 #endif
 
   printf("free_mesh.........."); fflush(stdout);
