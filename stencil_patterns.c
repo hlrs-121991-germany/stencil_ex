@@ -71,8 +71,7 @@ CALI_CXX_MARK_FUNCTION;
     neighbors[n][X] = x + _x;
     neighbors[n][Y] = y;
     if((neighbors[n][X] < 0) || (neighbors[n][X] >= x_size) ){
-      neighbors[n][X] = x;     
-      neighbors[n][Y] = y;
+      neighbors[n][X] = x;  
     }
     n++;
 
@@ -87,7 +86,6 @@ CALI_CXX_MARK_FUNCTION;
       neighbors[n][X] = x;
       neighbors[n][Y] = y + _y;
       if((neighbors[n][Y] < 0) || (neighbors[n][Y] >= y_size) ) {
-        neighbors[n][X] = x;
         neighbors[n][Y] = y;
       }
       n++;

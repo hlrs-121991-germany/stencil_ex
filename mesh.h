@@ -35,12 +35,15 @@ struct Mesh
 
 #if STENCIL_TYPE == 0
 #define NUM_NEIGHBORS 9
+#define TEMP_ROWS     2
 
 #elif STENCIL_TYPE == 1
 #define NUM_NEIGHBORS 5
+#define TEMP_ROWS     2
 
 #elif STENCIL_TYPE == 2
 #define NUM_NEIGHBORS 9
+#define TEMP_ROWS     3
 
 #endif
 
