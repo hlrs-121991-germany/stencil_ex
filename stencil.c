@@ -94,13 +94,13 @@ CALI_CXX_MARK_FUNCTION;
 
   int _x, _y, n, j;
 
-  // for (_x = 0; _x < TEMP_ROWS; _x++) {
-  //   for (_y = 0; _y < y_size; _y++) {
-  //     temp_mesh[_x][_y].heat   = 0;
-  //     temp_mesh[_x][_y].volume = 0;
-  //     temp_mesh[_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
-  //   }
-  // }
+  for (_x = 0; _x < TEMP_ROWS; _x++) {
+    for (_y = 0; _y < y_size; _y++) {
+      temp_mesh[_x][_y].heat   = 0;
+      temp_mesh[_x][_y].volume = 0;
+      temp_mesh[_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
+    }
+  }
 
   for (_x = 0; _x < x_size; _x++) {
 
