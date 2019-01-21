@@ -142,6 +142,7 @@ CALI_CXX_MARK_FUNCTION;
 
       for (t = 0; t < TEMP_ROWS; t++) {
         if(temp_inds[t] >= 0){
+            printf("YoHoHo and a bottle o riu\n");
           if(row_status[temp_inds[t]] == (TEMP_ROWS-1)){
             for (_y = 0; _y < y_size; _y++) {
               mesh[temp_inds[t]][_y].heat   = temp_mesh[t][_y].heat;
@@ -243,17 +244,17 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     fprintf(file, "x = %d\n", i);
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e", mesh[i][j].heat);
+      fprintf(file, "%10.2e ", mesh[i][j].heat);
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e", mesh[i][j].volume);
+      fprintf(file, "%10.2e ", mesh[i][j].volume);
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e", mesh[i][j].fancy);
+      fprintf(file, "%10.2e ", mesh[i][j].fancy);
     }
     fprintf(file, "\n\n");
   }
