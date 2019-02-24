@@ -65,9 +65,10 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     V = 1000;
     for (j = 0; j < y_size; j++) {
-      _mesh[i][j].heat   = H;
-      _mesh[i][j].volume = V;
-      _mesh[i][j].fancy  = i*j;
+      _mesh[i][j].avg = H;
+      _mesh[i][j].sum = V;
+      _mesh[i][j].pde = i*j;
+      _mesh[i][j].dep = H+V;
       V += 1000;
     }
     H += 100;
@@ -90,15 +91,16 @@ CALI_CXX_MARK_FUNCTION;
 
   int neighbors[NUM_NEIGHBORS][2];
   double dt2 = dt*dt;
-  double C = 0.25, dist2 = 1.0;
+  double C = 0.25, dx2 = 1.0;
 
   int _x, _y, n, j;
 
   for (_x = 0; _x < TEMP_ROWS; _x++) {
     for (_y = 0; _y < y_size; _y++) {
-      temp_mesh[_x][_y].heat   = 0;
-      temp_mesh[_x][_y].volume = 0;
-      temp_mesh[_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
+      temp_mesh[_x][_y].avg = 0;
+      temp_mesh[_x][_y].sum = 0;
+      temp_mesh[_x][_y].pde = -2*dt2 * mesh[_x][_y].pde * C;
+      temp_mesh[_x][_y].dep = -2*dt2 * mesh[_x][_y].dep * C;
     }
   }
 
@@ -108,16 +110,18 @@ CALI_CXX_MARK_FUNCTION;
     
     if((_x - TEMP_ROWS) >= 0) {
       for (_y = 0; _y < y_size; _y++) {
-        mesh[_x - TEMP_ROWS][_y].heat   = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].heat;
-        mesh[_x - TEMP_ROWS][_y].volume = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].volume;
-        mesh[_x - TEMP_ROWS][_y].fancy  = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].fancy;
+        mesh[_x - TEMP_ROWS][_y].avg = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].avg;
+        mesh[_x - TEMP_ROWS][_y].sum = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].sum;
+        mesh[_x - TEMP_ROWS][_y].pde = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].pde;
+        mesh[_x - TEMP_ROWS][_y].dep = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].dep;
       }
     }
 
     for (_y = 0; _y < y_size; _y++) {
-      temp_mesh[temp_x][_y].heat   = 0;
-      temp_mesh[temp_x][_y].volume = 0;
-      temp_mesh[temp_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
+      temp_mesh[temp_x][_y].avg   = 0;
+      temp_mesh[temp_x][_y].sum = 0;
+      temp_mesh[temp_x][_y].pde  = -2*dt2 * mesh[_x][_y].pde * C;
+      temp_mesh[temp_x][_y].dep  = -2*dt2 * mesh[_x][_y].dep * C;
     }
 
     for (_y = 0; _y < y_size; _y++) {
@@ -125,17 +129,24 @@ CALI_CXX_MARK_FUNCTION;
       get_neighbors(x_size, y_size, _x, _y, neighbors);
 
       for(n = 0; n < NUM_NEIGHBORS; n++) {
-        temp_mesh[temp_x][_y].heat += mesh[neighbors[n][X]][neighbors[n][Y]].heat;
+        temp_mesh[temp_x][_y].avg += mesh[neighbors[n][X]][neighbors[n][Y]].avg;
       }
-      temp_mesh[temp_x][_y].heat /= 9;
+      temp_mesh[temp_x][_y].avg /= 9;
 
       for(n = 0; n < NUM_NEIGHBORS; n++) {
-        temp_mesh[temp_x][_y].volume += mesh[neighbors[n][X]][neighbors[n][Y]].volume/NUM_NEIGHBORS;
+        temp_mesh[temp_x][_y].sum += mesh[neighbors[n][X]][neighbors[n][Y]].sum/NUM_NEIGHBORS;
       }
 
       for(n = 0; n < NUM_NEIGHBORS; n++){
-        dist2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
-        temp_mesh[temp_x][_y].fancy += (-2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy) / ((dist2 + 1.0) * C);
+        dx2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
+        temp_mesh[temp_x][_y].pde += (-2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].pde) / ((dx2 + 1.0) * C);
+      }
+
+      for(n = 0; n < NUM_NEIGHBORS; n++){
+        dx2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
+        temp_mesh[temp_x][_y].dep += (mesh[neighbors[n][X]][neighbors[n][Y]].avg*dt2 * \
+                                      mesh[neighbors[n][X]][neighbors[n][Y]].dep) / \
+                                      ((dx2 + mesh[neighbors[n][X]][neighbors[n][Y]].sum) * C);
       }
 
     }
@@ -145,9 +156,10 @@ CALI_CXX_MARK_FUNCTION;
 
   for(_x; _x < x_size + TEMP_ROWS; _x++) {
     for (_y = 0; _y < y_size; _y++) {
-      mesh[_x - TEMP_ROWS][_y].heat   = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].heat;
-      mesh[_x - TEMP_ROWS][_y].volume = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].volume;
-      mesh[_x - TEMP_ROWS][_y].fancy  = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].fancy;
+      mesh[_x - TEMP_ROWS][_y].avg = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].avg;
+      mesh[_x - TEMP_ROWS][_y].sum = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].sum;
+      mesh[_x - TEMP_ROWS][_y].pde = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].pde;
+      mesh[_x - TEMP_ROWS][_y].dep = temp_mesh[(_x - TEMP_ROWS) % TEMP_ROWS][_y].dep;
     }
   }
 
@@ -164,17 +176,22 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     printf("x = %d\n", i);
     for (j = 0; j < y_size; j++) {
-      printf("%10.2e ", mesh[i][j].heat);
+      printf("%10.2e ", mesh[i][j].avg);
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2e ", mesh[i][j].volume);
+      printf("%10.2e ", mesh[i][j].sum);
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2e ", mesh[i][j].fancy);
+      printf("%10.2e ", mesh[i][j].pde);
+    }
+    printf("\n");
+
+    for (j = 0; j < y_size; j++) {
+      printf("%10.2e ", mesh[i][j].dep);
     }
     printf("\n\n");
   }
@@ -192,17 +209,22 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     fprintf(file, "x = %d\n", i);
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e ", mesh[i][j].heat);
+      fprintf(file, "%10.2e ", mesh[i][j].avg);
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e ", mesh[i][j].volume);
+      fprintf(file, "%10.2e ", mesh[i][j].sum);
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e ", mesh[i][j].fancy);
+      fprintf(file, "%10.2e ", mesh[i][j].pde);
+    }
+    fprintf(file, "\n");
+
+    for (j = 0; j < y_size; j++) {
+      fprintf(file, "%10.2e ", mesh[i][j].dep);
     }
     fprintf(file, "\n\n");
   }
