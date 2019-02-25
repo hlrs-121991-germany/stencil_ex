@@ -1,6 +1,6 @@
 /*
  * Simple Stencil example
- * Main program example with openmp thread parallelism
+ * Main program example
  *
  * Brian J Gravelle
  * gravelle@cs.uoregon.edu
@@ -42,7 +42,6 @@
 #endif
 
 
-
 // create and fill the mesh with starting values
 int init_mesh(struct Mesh ***mesh, int x_size, int y_size) {
 #ifdef USE_CALI
@@ -69,9 +68,10 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     V = 1000;
     for (j = 0; j < y_size; j++) {
-      _mesh[i][j].heat   = H;
-      _mesh[i][j].volume = V;
-      _mesh[i][j].fancy  = i*j;
+      _mesh[i][j].avg = H;
+      _mesh[i][j].sum = V;
+      _mesh[i][j].pde = i*j;
+      _mesh[i][j].dep = H+V;
       V += 1000;
     }
     H += 100;
@@ -80,21 +80,6 @@ CALI_CXX_MARK_FUNCTION;
   *mesh = _mesh;
 
   return err;
-}
-
-// liberate the memory
-void free_mesh(struct Mesh **mesh, int x_size, int y_size) {
-#ifdef USE_CALI
-CALI_CXX_MARK_FUNCTION;
-#endif
-
-  int i;
-
-  for (i = 0; i < x_size; ++i) {
-    free(mesh[i]);
-  }
-  free(mesh);
-
 }
 
 double pythag(double x1, double y1, double x2, double y2) {
@@ -107,12 +92,13 @@ void do_timestep(struct Mesh **mesh, struct Mesh **_temp_mesh, int x_size, int y
 CALI_CXX_MARK_FUNCTION;
 #endif
 
-  int neighbors[NUM_NEIGHBORS][2];
+  // OpenMP specific variables
   char row_status[x_size];
   int thr_id;
-  double dt2 = dt*dt;
-  double C = 0.25, dist2 = 1.0;
   struct Mesh **temp_mesh;
+
+  double dt2 = dt*dt;
+  double C = 0.25, dx2 = 1.0;
 
   int _x, _y, n, i, j;
 
@@ -123,15 +109,19 @@ CALI_CXX_MARK_FUNCTION;
   for (i = x_size - TEMP_ROWS; i < x_size; i++) {
     row_status[i] = TEMP_ROWS + (i - x_size);
   }
-  
-  #pragma omp parallel for private(_y, n, thr_id, temp_mesh)
+
+  // looping over all rows of the matrix
+  // main source of paralleism 
+  #pragma omp parallel for private(_y, n, thr_id, temp_mesh, dx2)
   for (_x = 0; _x < x_size; _x++) {
+
+    int neighbors[NUM_NEIGHBORS][2];
 
     // establish temporary mesh for this thread
     thr_id = omp_get_thread_num();
     temp_mesh = &_temp_mesh[thr_id*TEMP_ROWS];
 
-    // set list of temporary indices to be untaken
+    // set list of temporary indices to untaken (-1)
     int temp_inds[TEMP_ROWS];
     for (int t = 0; t < TEMP_ROWS; t++) temp_inds[t] = -1;
 
@@ -140,60 +130,69 @@ CALI_CXX_MARK_FUNCTION;
     int t;
     while (temp_x < 0) {
 
+      // check temp rows to see if the original os done being used
       for (t = 0; t < TEMP_ROWS; t++) {
-        if(temp_inds[t] >= 0){
-            printf("YoHoHo and a bottle o riu\n");
+        if(temp_inds[t] >= 0){ 
           if(row_status[temp_inds[t]] == (TEMP_ROWS-1)){
             for (_y = 0; _y < y_size; _y++) {
-              mesh[temp_inds[t]][_y].heat   = temp_mesh[t][_y].heat;
-              mesh[temp_inds[t]][_y].volume = temp_mesh[t][_y].volume;
-              mesh[temp_inds[t]][_y].fancy  = temp_mesh[t][_y].fancy;
+              mesh[temp_inds[t]][_y].avg = temp_mesh[t][_y].avg;
+              mesh[temp_inds[t]][_y].sum = temp_mesh[t][_y].sum;
+              mesh[temp_inds[t]][_y].pde = temp_mesh[t][_y].pde;
+              mesh[temp_inds[t]][_y].dep = temp_mesh[t][_y].dep;
             }
             temp_inds[t] = -1;
           }
         }
       }
 
+      // choose next temporary row to use
       for (t = 0; t < TEMP_ROWS; t++) {
         if(temp_inds[t] < 0){
           temp_x = t;
           temp_inds[t] = _x;
           break;
         }
+
       }
 
     } // while
 
+    // fill next temp row with old values
     for (_y = 0; _y < y_size; _y++) {
-      temp_mesh[temp_x][_y].heat   = 0;
-      temp_mesh[temp_x][_y].volume = 0;
-      temp_mesh[temp_x][_y].fancy  = -2*dt2 * mesh[_x][_y].fancy * C;
+      temp_mesh[temp_x][_y].avg = 0;
+      temp_mesh[temp_x][_y].sum = 0;
+      temp_mesh[temp_x][_y].pde = -2*dt2 * mesh[_x][_y].pde * C;
+      temp_mesh[temp_x][_y].dep = -2*dt2 * mesh[_x][_y].dep * C;
     }
 
+    // actually do some computation
     for (_y = 0; _y < y_size; _y++) {
-
-      int neighbors[NUM_NEIGHBORS][2];
 
       get_neighbors(x_size, y_size, _x, _y, neighbors);
 
-      // #pragma simd
       for(n = 0; n < NUM_NEIGHBORS; n++) {
-        temp_mesh[temp_x][_y].heat += mesh[neighbors[n][X]][neighbors[n][Y]].heat;
+        temp_mesh[temp_x][_y].avg += mesh[neighbors[n][X]][neighbors[n][Y]].avg;
       }
-      temp_mesh[temp_x][_y].heat /= NUM_NEIGHBORS;
+      temp_mesh[temp_x][_y].avg /= NUM_NEIGHBORS;
 
-      // #pragma simd
       for(n = 0; n < NUM_NEIGHBORS; n++) {
-        temp_mesh[temp_x][_y].volume = mesh[neighbors[n][X]][neighbors[n][Y]].volume / NUM_NEIGHBORS;
+        temp_mesh[temp_x][_y].sum += mesh[neighbors[n][X]][neighbors[n][Y]].sum/NUM_NEIGHBORS;
       }
 
       for(n = 0; n < NUM_NEIGHBORS; n++){
-        double dist2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
-        temp_mesh[temp_x][_y].fancy += (-2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].fancy) / ((dist2 + 1.0) * C);
+        dx2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
+        temp_mesh[temp_x][_y].pde += (-2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].pde) / ((dx2 + 1.0) * C);
+      }
+
+      for(n = 0; n < NUM_NEIGHBORS; n++){
+        dx2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
+        temp_mesh[temp_x][_y].dep += (mesh[neighbors[n][X]][neighbors[n][Y]].avg*dt2 * \
+                                      mesh[neighbors[n][X]][neighbors[n][Y]].dep) / \
+                                      ((dx2 + mesh[neighbors[n][X]][neighbors[n][Y]].sum) * C);
       }
     } // _y loop
 
-
+    // set row satus
     #pragma omp critical
     for (t = 1; t < TEMP_ROWS-1; t++) {
       if((_x-t) >= 0) 
@@ -215,23 +214,27 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     printf("x = %d\n", i);
     for (j = 0; j < y_size; j++) {
-      printf("%10.2e ", mesh[i][j].heat);
+      printf("%10.2e ", mesh[i][j].avg);
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2e ", mesh[i][j].volume);
+      printf("%10.2e ", mesh[i][j].sum);
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2e ", mesh[i][j].fancy);
+      printf("%10.2e ", mesh[i][j].pde);
+    }
+    printf("\n");
+
+    for (j = 0; j < y_size; j++) {
+      printf("%10.2e ", mesh[i][j].dep);
     }
     printf("\n\n");
   }
 
 }
-
 
 // print the mesh to file
 void output_mesh(FILE* file, struct Mesh **mesh, int x_size, int y_size) {
@@ -244,20 +247,40 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     fprintf(file, "x = %d\n", i);
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e ", mesh[i][j].heat);
+      fprintf(file, "%10.2e ", mesh[i][j].avg);
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e ", mesh[i][j].volume);
+      fprintf(file, "%10.2e ", mesh[i][j].sum);
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e ", mesh[i][j].fancy);
+      fprintf(file, "%10.2e ", mesh[i][j].pde);
+    }
+    fprintf(file, "\n");
+
+    for (j = 0; j < y_size; j++) {
+      fprintf(file, "%10.2e ", mesh[i][j].dep);
     }
     fprintf(file, "\n\n");
   }
+}
+
+// liberate the memory
+void free_mesh(struct Mesh **mesh, int x_size, int y_size) {
+#ifdef USE_CALI
+CALI_CXX_MARK_FUNCTION;
+#endif
+
+  int i;
+
+  for (i = 0; i < x_size; ++i) {
+    free(mesh[i]);
+  }
+  free(mesh);
+
 }
 
 int test_small_mesh() {
@@ -273,16 +296,9 @@ CALI_CXX_MARK_FUNCTION;
   int y_size = 10;
   double time = 0.0;
 
-  int num_thr;
-  #pragma omp parallel
-  {
-    if(omp_get_thread_num()==0)
-    num_thr = omp_get_num_threads();
-  }
-
   printf("init_mesh...\n");
   err = err | init_mesh(&mesh_1, x_size, y_size);
-  err = err | init_mesh(&mesh_2, TEMP_ROWS * num_thr, y_size);
+  err = err | init_mesh(&mesh_2, TEMP_ROWS, y_size);
   if(mesh_1 == NULL) return 1;
   if(mesh_2 == NULL) return 1;
   printf("print_mesh...\n");
@@ -293,7 +309,7 @@ CALI_CXX_MARK_FUNCTION;
   print_mesh(mesh_1, x_size, y_size);
   printf("free_mesh...\n");
   free_mesh(mesh_1, x_size, y_size);
-  free_mesh(mesh_2, TEMP_ROWS * num_thr, y_size);
+  free_mesh(mesh_2, TEMP_ROWS, y_size);
 
   return err;
 }
@@ -314,27 +330,20 @@ CALI_CXX_MARK_FUNCTION;
   double wall_step_start, wall_step_end;
   double wall_free_start, wall_free_end;
 
-  int num_thr;
-  #pragma omp parallel
-  {
-    if(omp_get_thread_num()==0)
-      num_thr = omp_get_num_threads();
-  }
 
   printf("\n\nRunning new Stencil with \n\
     x_size     = %d \n\
     y_size     = %d \n\
     start time = %f \n\
     time step  = %f \n\
-    end time   = %f \n\
-    num thrs   = %d \n\n",
-    x_size, y_size, time, step, time_stop, num_thr);
+    end time   = %f \n\n",
+    x_size, y_size, time, step, time_stop);
 
   wall_tot_start = omp_get_wtime();
   wall_init_start = omp_get_wtime();
-  printf("init_mesh.........."); fflush(stdout);
+  printf("init_mesh......."); fflush(stdout);
   err = err | init_mesh(&main_mesh, x_size, y_size);
-  err = err | init_mesh(&temp_mesh, TEMP_ROWS * num_thr, y_size);
+  err = err | init_mesh(&temp_mesh, TEMP_ROWS, y_size);
   if(main_mesh == NULL) return 1;
   if(temp_mesh == NULL) return 1;
   wall_init_end = omp_get_wtime();
@@ -357,7 +366,7 @@ CALI_CXX_MARK_FUNCTION;
 
   while(time < time_stop) {
 
-    printf("timestep %.2f......", time); fflush(stdout);
+    printf("timestep %.2f...", time); fflush(stdout);
     wall_step_start = omp_get_wtime();
     do_timestep(main_mesh, temp_mesh, x_size, y_size, time, step);
     time += step;
@@ -376,10 +385,10 @@ CALI_CXX_MARK_FUNCTION;
   printf("%fs\n", (omp_get_wtime() - io_start));
 #endif
 
-  printf("free_mesh.........."); fflush(stdout);
+  printf("free_mesh.......\n"); fflush(stdout);
   wall_free_start = omp_get_wtime();
   free_mesh(main_mesh, x_size, y_size);
-  free_mesh(temp_mesh, TEMP_ROWS * num_thr, y_size);
+  free_mesh(temp_mesh, TEMP_ROWS, y_size);
   wall_free_end = omp_get_wtime();
   printf("%fs\n", (wall_free_end - wall_free_start));
 

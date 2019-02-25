@@ -19,9 +19,10 @@
 struct Mesh
 {
 
-  double heat;    // update to the average to itself and the neighbors
-  double volume;  // divide the vaule amoung itself and neighbors
-  double fancy;   // just for fun add the heat and volume
+  double avg;   // update to the average to itself and the neighbors
+  double sum;   // summation of a fraction of itself and neighbors
+  double pde;   // roughly based on partial differential equation stencils
+  double dep;   // dependant on other values
   
 };
 
