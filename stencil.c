@@ -87,82 +87,34 @@ double pythag(double x1, double y1, double x2, double y2) {
 }
 
 // perform one iteration of the timestep
-void do_timestep(struct Mesh **mesh, struct Mesh **_temp_mesh, int x_size, int y_size, double time, double dt) {
+void do_timestep(struct Mesh **mesh, struct Mesh **temp_mesh, int x_size, int y_size, double time, double dt) {
 #ifdef USE_CALI
 CALI_CXX_MARK_FUNCTION;
 #endif
 
-  // OpenMP specific variables
-  char row_status[x_size];
   int thr_id;
-  struct Mesh **temp_mesh;
-
   double dt2 = dt*dt;
   double C = 0.25, dx2 = 1.0;
 
-  int _x, _y, n, i, j;
-
-  for (i = 0; i < x_size; i++) {
-    row_status[i] = 0;
-  }
-  // goal set the last couple rows to start at a higher count since they have fewer dependancies
-  for (i = x_size - TEMP_ROWS; i < x_size; i++) {
-    row_status[i] = TEMP_ROWS + (i - x_size);
-  }
+  int _x, _y, n, i, j, t;
 
   // looping over all rows of the matrix
   // main source of paralleism 
-  #pragma omp parallel for private(_y, n, thr_id, temp_mesh, dx2)
-  for (_x = 0; _x < x_size; _x++) {
-
-    int neighbors[NUM_NEIGHBORS][2];
-
+  #pragma omp parallel private(_y, n, t, thr_id, dx2)
+  {
     // establish temporary mesh for this thread
     thr_id = omp_get_thread_num();
-    temp_mesh = &_temp_mesh[thr_id*TEMP_ROWS];
+    int neighbors[NUM_NEIGHBORS][2];
 
-    // set list of temporary indices to untaken (-1)
-    int temp_inds[TEMP_ROWS];
-    for (int t = 0; t < TEMP_ROWS; t++) temp_inds[t] = -1;
+  #pragma omp for 
+  for (_x = 0; _x < x_size; _x++) {
 
-    // get next available temp index
-    int temp_x = -1;
-    int t;
-    while (temp_x < 0) {
-
-      // check temp rows to see if the original os done being used
-      for (t = 0; t < TEMP_ROWS; t++) {
-        if(temp_inds[t] >= 0){ 
-          if(row_status[temp_inds[t]] == (TEMP_ROWS-1)){
-            for (_y = 0; _y < y_size; _y++) {
-              mesh[temp_inds[t]][_y].avg = temp_mesh[t][_y].avg;
-              mesh[temp_inds[t]][_y].sum = temp_mesh[t][_y].sum;
-              mesh[temp_inds[t]][_y].pde = temp_mesh[t][_y].pde;
-              mesh[temp_inds[t]][_y].dep = temp_mesh[t][_y].dep;
-            }
-            temp_inds[t] = -1;
-          }
-        }
-      }
-
-      // choose next temporary row to use
-      for (t = 0; t < TEMP_ROWS; t++) {
-        if(temp_inds[t] < 0){
-          temp_x = t;
-          temp_inds[t] = _x;
-          break;
-        }
-
-      }
-
-    } // while
-
-    // fill next temp row with old values
+    // fill next temp row with starting values
     for (_y = 0; _y < y_size; _y++) {
-      temp_mesh[temp_x][_y].avg = 0;
-      temp_mesh[temp_x][_y].sum = 0;
-      temp_mesh[temp_x][_y].pde = -2*dt2 * mesh[_x][_y].pde * C;
-      temp_mesh[temp_x][_y].dep = -2*dt2 * mesh[_x][_y].dep * C;
+      temp_mesh[_x][_y].avg = 0;
+      temp_mesh[_x][_y].sum = 0;
+      temp_mesh[_x][_y].pde = -2*dt2 * mesh[_x][_y].pde * C;
+      temp_mesh[_x][_y].dep = -2*dt2 * mesh[_x][_y].dep * C;
     }
 
     // actually do some computation
@@ -171,35 +123,29 @@ CALI_CXX_MARK_FUNCTION;
       get_neighbors(x_size, y_size, _x, _y, neighbors);
 
       for(n = 0; n < NUM_NEIGHBORS; n++) {
-        temp_mesh[temp_x][_y].avg += mesh[neighbors[n][X]][neighbors[n][Y]].avg;
+        temp_mesh[_x][_y].avg += mesh[neighbors[n][X]][neighbors[n][Y]].avg;
       }
-      temp_mesh[temp_x][_y].avg /= NUM_NEIGHBORS;
+      temp_mesh[_x][_y].avg /= NUM_NEIGHBORS;
 
       for(n = 0; n < NUM_NEIGHBORS; n++) {
-        temp_mesh[temp_x][_y].sum += mesh[neighbors[n][X]][neighbors[n][Y]].sum/NUM_NEIGHBORS;
+        temp_mesh[_x][_y].sum += mesh[neighbors[n][X]][neighbors[n][Y]].sum/NUM_NEIGHBORS;
       }
 
       for(n = 0; n < NUM_NEIGHBORS; n++){
         dx2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
-        temp_mesh[temp_x][_y].pde += (-2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].pde) / ((dx2 + 1.0) * C);
+        temp_mesh[_x][_y].pde += (-2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].pde) / ((dx2 + 1.0) * C);
       }
 
       for(n = 0; n < NUM_NEIGHBORS; n++){
         dx2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
-        temp_mesh[temp_x][_y].dep += (mesh[neighbors[n][X]][neighbors[n][Y]].avg*dt2 * \
-                                      mesh[neighbors[n][X]][neighbors[n][Y]].dep) / \
-                                      ((dx2 + mesh[neighbors[n][X]][neighbors[n][Y]].sum) * C);
+        temp_mesh[_x][_y].dep += (mesh[neighbors[n][X]][neighbors[n][Y]].avg*dt2 * \
+                                  mesh[neighbors[n][X]][neighbors[n][Y]].dep) / \
+                                  ((dx2 + mesh[neighbors[n][X]][neighbors[n][Y]].sum) * C);
       }
     } // _y loop
 
-    // set row satus
-    #pragma omp critical
-    for (t = 1; t < TEMP_ROWS-1; t++) {
-      if((_x-t) >= 0) 
-        row_status[_x-t] += 1;
-    }
-
   } // _x loop
+  } // parallel region
 
 } // do time step
 
@@ -330,20 +276,28 @@ CALI_CXX_MARK_FUNCTION;
   double wall_step_start, wall_step_end;
   double wall_free_start, wall_free_end;
 
+  int num_thr;
+  omp_set_num_threads(4);
+  #pragma omp parallel
+  {
+    if(omp_get_thread_num()==0)
+      num_thr = omp_get_num_threads();
+  }
 
   printf("\n\nRunning new Stencil with \n\
     x_size     = %d \n\
     y_size     = %d \n\
+    num_thr    = %d \n\
     start time = %f \n\
     time step  = %f \n\
     end time   = %f \n\n",
-    x_size, y_size, time, step, time_stop);
+    x_size, y_size, num_thr, time, step, time_stop);
 
   wall_tot_start = omp_get_wtime();
   wall_init_start = omp_get_wtime();
   printf("init_mesh......."); fflush(stdout);
   err = err | init_mesh(&main_mesh, x_size, y_size);
-  err = err | init_mesh(&temp_mesh, TEMP_ROWS, y_size);
+  err = err | init_mesh(&temp_mesh, x_size, y_size);
   if(main_mesh == NULL) return 1;
   if(temp_mesh == NULL) return 1;
   wall_init_end = omp_get_wtime();
@@ -369,6 +323,13 @@ CALI_CXX_MARK_FUNCTION;
     printf("timestep %.2f...", time); fflush(stdout);
     wall_step_start = omp_get_wtime();
     do_timestep(main_mesh, temp_mesh, x_size, y_size, time, step);
+    time += step;
+    wall_step_end = omp_get_wtime();
+    printf("%fs\n", (wall_step_end - wall_step_start));
+
+    printf("timestep %.2f...", time); fflush(stdout);
+    wall_step_start = omp_get_wtime();
+    do_timestep(temp_mesh, main_mesh, x_size, y_size, time, step);
     time += step;
     wall_step_end = omp_get_wtime();
     printf("%fs\n", (wall_step_end - wall_step_start));
