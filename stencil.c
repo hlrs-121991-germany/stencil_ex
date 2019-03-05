@@ -212,7 +212,7 @@ CALI_CXX_MARK_FUNCTION;
       ACCESS_MESH(temp_mesh, _x, _y, avg) = 0;
       ACCESS_MESH(temp_mesh, _x, _y, sum) = 0;
       ACCESS_MESH(temp_mesh, _x, _y, pde) = -2*dt2 * ACCESS_MESH(mesh, _x, _y, pde) * C;
-      ACCESS_MESH(temp_mesh, _x, _y, dep) = -2*dt2 * ACCESS_MESH(mesh, _x, _y, pde) * C;
+      ACCESS_MESH(temp_mesh, _x, _y, dep) = -2*dt2 * ACCESS_MESH(mesh, _x, _y, dep) * C;
 
     }
 
