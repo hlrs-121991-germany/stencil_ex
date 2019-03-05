@@ -41,6 +41,7 @@
 #define FILE_NAME "openmp_results.txt"
 #endif
 
+#if USE_AOS
 
 // create and fill the mesh with starting values
 int init_mesh(struct Mesh ***mesh, int x_size, int y_size) {
@@ -68,10 +69,14 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     V = 1000;
     for (j = 0; j < y_size; j++) {
-      _mesh[i][j].avg = H;
-      _mesh[i][j].sum = V;
-      _mesh[i][j].pde = i*j;
-      _mesh[i][j].dep = H+V;
+      ACCESS_MESH(_mesh, i, j, avg) = H;
+      ACCESS_MESH(_mesh, i, j, sum) = V;
+      ACCESS_MESH(_mesh, i, j, pde) = i*j;
+      ACCESS_MESH(_mesh, i, j, dep) = H+V;
+      // _mesh[i][j].avg = H;
+      // _mesh[i][j].sum = V;
+      // _mesh[i][j].pde = i*j;
+      // _mesh[i][j].dep = H+V;
       V += 1000;
     }
     H += 100;
@@ -82,12 +87,104 @@ CALI_CXX_MARK_FUNCTION;
   return err;
 }
 
+
+// liberate the memory
+void free_mesh(MESH mesh, int x_size, int y_size) {
+#ifdef USE_CALI
+CALI_CXX_MARK_FUNCTION;
+#endif
+
+  int i;
+
+  for (i = 0; i < x_size; ++i) {
+    free(mesh[i]);
+  }
+  free(mesh);
+
+}
+
+
+#else // USE_SOA
+
+// create and fill the mesh with starting values
+int init_mesh(struct Mesh *mesh, int x_size, int y_size) {
+#ifdef USE_CALI
+CALI_CXX_MARK_FUNCTION;
+#endif
+
+  int err = FALSE;
+  int i, j;
+
+  double H = 100;
+  double V = 1000;
+
+  // allocate memory and verify that it worked
+  mesh->avg = (double**) malloc(x_size * sizeof(double*));
+  mesh->sum = (double**) malloc(x_size * sizeof(double*));
+  mesh->pde = (double**) malloc(x_size * sizeof(double*));
+  mesh->dep = (double**) malloc(x_size * sizeof(double*));
+  if(mesh->avg == NULL) err = TRUE;
+  if(mesh->sum == NULL) err = TRUE;
+  if(mesh->pde == NULL) err = TRUE;
+  if(mesh->dep == NULL) err = TRUE;
+  for (i = 0; i < x_size; ++i) {
+    mesh->avg[i] = (double*) malloc(y_size * sizeof(double));
+    mesh->sum[i] = (double*) malloc(y_size * sizeof(double));
+    mesh->pde[i] = (double*) malloc(y_size * sizeof(double));
+    mesh->dep[i] = (double*) malloc(y_size * sizeof(double));
+    if(mesh->avg[i] == NULL) err = TRUE;
+    if(mesh->sum[i] == NULL) err = TRUE;
+    if(mesh->pde[i] == NULL) err = TRUE;
+    if(mesh->dep[i] == NULL) err = TRUE;
+  }
+
+  // define starting values
+  for (i = 0; i < x_size; i++) {
+    V = 1000;
+    for (j = 0; j < y_size; j++) {
+      mesh->sum[i][j] = H;
+      mesh->avg[i][j] = V;
+      mesh->pde[i][j] = i*j;
+      mesh->dep[i][j] = H+V;
+      V += 1000;
+    }
+    H += 100;
+  }
+
+  return err;
+}
+
+
+// liberate the memory
+void free_mesh(struct Mesh mesh, int x_size, int y_size){
+#ifdef USE_CALI
+CALI_CXX_MARK_FUNCTION;
+#endif
+
+  int i;
+
+  for (i = 0; i < x_size; ++i) {
+    free(mesh.avg[i]);
+    free(mesh.sum[i]);
+    free(mesh.pde[i]);
+    free(mesh.dep[i]);
+  }
+  free(mesh.avg);
+  free(mesh.sum);
+  free(mesh.pde);
+  free(mesh.dep);
+
+}
+
+
+#endif
+
 double pythag(double x1, double y1, double x2, double y2) {
   return (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
 }
 
 // perform one iteration of the timestep
-void do_timestep(struct Mesh **mesh, struct Mesh **temp_mesh, int x_size, int y_size, double time, double dt) {
+void do_timestep(MESH mesh, MESH temp_mesh, int x_size, int y_size, double time, double dt) {
 #ifdef USE_CALI
 CALI_CXX_MARK_FUNCTION;
 #endif
@@ -111,10 +208,12 @@ CALI_CXX_MARK_FUNCTION;
 
     // fill next temp row with starting values
     for (_y = 0; _y < y_size; _y++) {
-      temp_mesh[_x][_y].avg = 0;
-      temp_mesh[_x][_y].sum = 0;
-      temp_mesh[_x][_y].pde = -2*dt2 * mesh[_x][_y].pde * C;
-      temp_mesh[_x][_y].dep = -2*dt2 * mesh[_x][_y].dep * C;
+
+      ACCESS_MESH(temp_mesh, _x, _y, avg) = 0;
+      ACCESS_MESH(temp_mesh, _x, _y, sum) = 0;
+      ACCESS_MESH(temp_mesh, _x, _y, pde) = -2*dt2 * ACCESS_MESH(mesh, _x, _y, pde) * C;
+      ACCESS_MESH(temp_mesh, _x, _y, dep) = -2*dt2 * ACCESS_MESH(mesh, _x, _y, pde) * C;
+
     }
 
     // actually do some computation
@@ -123,24 +222,30 @@ CALI_CXX_MARK_FUNCTION;
       get_neighbors(x_size, y_size, _x, _y, neighbors);
 
       for(n = 0; n < NUM_NEIGHBORS; n++) {
-        temp_mesh[_x][_y].avg += mesh[neighbors[n][X]][neighbors[n][Y]].avg;
+        ACCESS_MESH(temp_mesh, _x, _y, avg) += ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], avg);
+        // temp_mesh[_x][_y].avg += mesh[neighbors[n][X]][neighbors[n][Y]].avg;
       }
-      temp_mesh[_x][_y].avg /= NUM_NEIGHBORS;
+      ACCESS_MESH(temp_mesh, _x, _y, avg) /= NUM_NEIGHBORS;
 
       for(n = 0; n < NUM_NEIGHBORS; n++) {
-        temp_mesh[_x][_y].sum += mesh[neighbors[n][X]][neighbors[n][Y]].sum/NUM_NEIGHBORS;
+        ACCESS_MESH(temp_mesh, _x, _y, sum) += ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], sum)/NUM_NEIGHBORS;
+        // temp_mesh[_x][_y].sum += mesh[neighbors[n][X]][neighbors[n][Y]].sum/NUM_NEIGHBORS;
       }
 
       for(n = 0; n < NUM_NEIGHBORS; n++){
         dx2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
-        temp_mesh[_x][_y].pde += (-2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].pde) / ((dx2 + 1.0) * C);
+        ACCESS_MESH(temp_mesh, _x, _y, pde) += (-2*dt2 * ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], pde)) / ((dx2 + 1.0) * C);
+        // temp_mesh[_x][_y].pde += (-2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].pde) / ((dx2 + 1.0) * C);
       }
 
       for(n = 0; n < NUM_NEIGHBORS; n++){
         dx2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
-        temp_mesh[_x][_y].dep += (mesh[neighbors[n][X]][neighbors[n][Y]].avg*dt2 * \
-                                  mesh[neighbors[n][X]][neighbors[n][Y]].dep) / \
-                                  ((dx2 + mesh[neighbors[n][X]][neighbors[n][Y]].sum) * C);
+        ACCESS_MESH(temp_mesh, _x, _y, dep) += (ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], avg)*dt2 * \
+                                  ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], dep)) / \
+                                  ((dx2 + ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], sum)) * C);
+        // temp_mesh[_x][_y].dep += (mesh[neighbors[n][X]][neighbors[n][Y]].avg*dt2 * \
+        //                           mesh[neighbors[n][X]][neighbors[n][Y]].dep) / \
+        //                           ((dx2 + mesh[neighbors[n][X]][neighbors[n][Y]].sum) * C);
       }
     } // _y loop
 
@@ -150,7 +255,7 @@ CALI_CXX_MARK_FUNCTION;
 } // do time step
 
 // print the mesh
-void print_mesh(struct Mesh **mesh, int x_size, int y_size) {
+void print_mesh(MESH mesh, int x_size, int y_size) {
 #ifdef USE_CALI
 CALI_CXX_MARK_FUNCTION;
 #endif
@@ -160,22 +265,22 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     printf("x = %d\n", i);
     for (j = 0; j < y_size; j++) {
-      printf("%10.2e ", mesh[i][j].avg);
+      printf("%10.2e ", ACCESS_MESH(mesh, i, j, avg));
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2e ", mesh[i][j].sum);
+      printf("%10.2e ", ACCESS_MESH(mesh, i, j, sum));
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2e ", mesh[i][j].pde);
+      printf("%10.2e ", ACCESS_MESH(mesh, i, j, pde));
     }
     printf("\n");
 
     for (j = 0; j < y_size; j++) {
-      printf("%10.2e ", mesh[i][j].dep);
+      printf("%10.2e ", ACCESS_MESH(mesh, i, j, dep));
     }
     printf("\n\n");
   }
@@ -183,7 +288,7 @@ CALI_CXX_MARK_FUNCTION;
 }
 
 // print the mesh to file
-void output_mesh(FILE* file, struct Mesh **mesh, int x_size, int y_size) {
+void output_mesh(FILE* file, MESH mesh, int x_size, int y_size) {
 #ifdef USE_CALI
 CALI_CXX_MARK_FUNCTION;
 #endif
@@ -193,40 +298,25 @@ CALI_CXX_MARK_FUNCTION;
   for (i = 0; i < x_size; i++) {
     fprintf(file, "x = %d\n", i);
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e ", mesh[i][j].avg);
+      fprintf(file, "%10.2e ", ACCESS_MESH(mesh, i, j, avg));
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e ", mesh[i][j].sum);
+      fprintf(file, "%10.2e ", ACCESS_MESH(mesh, i, j, sum));
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e ", mesh[i][j].pde);
+      fprintf(file, "%10.2e ", ACCESS_MESH(mesh, i, j, pde));
     }
     fprintf(file, "\n");
 
     for (j = 0; j < y_size; j++) {
-      fprintf(file, "%10.2e ", mesh[i][j].dep);
+      fprintf(file, "%10.2e ", ACCESS_MESH(mesh, i, j, dep));
     }
     fprintf(file, "\n\n");
   }
-}
-
-// liberate the memory
-void free_mesh(struct Mesh **mesh, int x_size, int y_size) {
-#ifdef USE_CALI
-CALI_CXX_MARK_FUNCTION;
-#endif
-
-  int i;
-
-  for (i = 0; i < x_size; ++i) {
-    free(mesh[i]);
-  }
-  free(mesh);
-
 }
 
 int test_small_mesh() {
@@ -236,8 +326,8 @@ CALI_CXX_MARK_FUNCTION;
 
   int err = FALSE;
 
-  struct Mesh **mesh_1 = NULL;
-  struct Mesh **mesh_2 = NULL;
+  MESH mesh_1;
+  MESH mesh_2;
   int x_size = 5;
   int y_size = 10;
   double time = 0.0;
@@ -245,8 +335,21 @@ CALI_CXX_MARK_FUNCTION;
   printf("init_mesh...\n");
   err = err | init_mesh(&mesh_1, x_size, y_size);
   err = err | init_mesh(&mesh_2, TEMP_ROWS, y_size);
-  if(mesh_1 == NULL) return 1;
-  if(mesh_2 == NULL) return 1;
+  
+#if USE_AOS 
+  if(mesh_1 == NULL)     return 1;
+  if(mesh_2 == NULL)     return 1;
+#else
+  if(mesh_1.avg == NULL) return 1;
+  if(mesh_2.avg == NULL) return 1;
+  if(mesh_1.sum == NULL) return 1;
+  if(mesh_2.sum == NULL) return 1;
+  if(mesh_1.pde == NULL) return 1;
+  if(mesh_2.pde == NULL) return 1;
+  if(mesh_1.dep == NULL) return 1;
+  if(mesh_2.dep == NULL) return 1;
+#endif
+
   printf("print_mesh...\n");
   print_mesh(mesh_1, x_size, y_size);
   printf("do_timestep...\n");
@@ -268,8 +371,8 @@ CALI_CXX_MARK_FUNCTION;
 
   int err = FALSE;
 
-  struct Mesh **main_mesh = NULL;
-  struct Mesh **temp_mesh = NULL;
+  MESH main_mesh;
+  MESH temp_mesh;
 
   double wall_tot_start, wall_tot_end;
   double wall_init_start, wall_init_end;
@@ -298,8 +401,22 @@ CALI_CXX_MARK_FUNCTION;
   printf("init_mesh......."); fflush(stdout);
   err = err | init_mesh(&main_mesh, x_size, y_size);
   err = err | init_mesh(&temp_mesh, x_size, y_size);
-  if(main_mesh == NULL) return 1;
-  if(temp_mesh == NULL) return 1;
+  
+#if USE_AOS 
+  if(main_mesh == NULL)     return 1;
+  if(temp_mesh == NULL)     return 1;
+#else
+  if(main_mesh.avg == NULL) return 1;
+  if(temp_mesh.avg == NULL) return 1;
+  if(main_mesh.sum == NULL) return 1;
+  if(temp_mesh.sum == NULL) return 1;
+  if(main_mesh.pde == NULL) return 1;
+  if(temp_mesh.pde == NULL) return 1;
+  if(main_mesh.dep == NULL) return 1;
+  if(temp_mesh.dep == NULL) return 1;
+#endif
+
+
   wall_init_end = omp_get_wtime();
   printf("%fs\n", (wall_init_end - wall_init_start));
 
