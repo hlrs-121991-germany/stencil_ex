@@ -1,6 +1,7 @@
 # repo specific
 test_stencil
 old_stencil.c
+*.json
 
 # Prerequisites
 *.d
