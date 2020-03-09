@@ -34,7 +34,7 @@
 #endif
 
 #ifndef TIME_STOP
-#define TIME_STOP 10.0
+#define TIME_STOP 5.0
 #endif
 
 #ifndef FILE_NAME
@@ -199,9 +199,14 @@ CALI_CXX_MARK_FUNCTION;
   // main source of paralleism 
   #pragma omp parallel private(_y, n, t, thr_id, dx2)
   {
+
     // establish temporary mesh for this thread
     thr_id = omp_get_thread_num();
     int neighbors[NUM_NEIGHBORS][2];
+
+#ifdef USE_CALI
+CALI_MARK_BEGIN("computation");
+#endif
 
   #pragma omp for 
   for (_x = 0; _x < x_size; _x++) {
@@ -223,19 +228,16 @@ CALI_CXX_MARK_FUNCTION;
 
       for(n = 0; n < NUM_NEIGHBORS; n++) {
         ACCESS_MESH(temp_mesh, _x, _y, avg) += ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], avg);
-        // temp_mesh[_x][_y].avg += mesh[neighbors[n][X]][neighbors[n][Y]].avg;
       }
       ACCESS_MESH(temp_mesh, _x, _y, avg) /= NUM_NEIGHBORS;
 
       for(n = 0; n < NUM_NEIGHBORS; n++) {
         ACCESS_MESH(temp_mesh, _x, _y, sum) += ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], sum)/NUM_NEIGHBORS;
-        // temp_mesh[_x][_y].sum += mesh[neighbors[n][X]][neighbors[n][Y]].sum/NUM_NEIGHBORS;
       }
 
       for(n = 0; n < NUM_NEIGHBORS; n++){
         dx2 = pythag(_x, _y, neighbors[n][X], neighbors[n][Y]); // dx^2
         ACCESS_MESH(temp_mesh, _x, _y, pde) += (-2*dt2 * ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], pde)) / ((dx2 + 1.0) * C);
-        // temp_mesh[_x][_y].pde += (-2*dt2 * mesh[neighbors[n][X]][neighbors[n][Y]].pde) / ((dx2 + 1.0) * C);
       }
 
       for(n = 0; n < NUM_NEIGHBORS; n++){
@@ -243,13 +245,13 @@ CALI_CXX_MARK_FUNCTION;
         ACCESS_MESH(temp_mesh, _x, _y, dep) += (ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], avg)*dt2 * \
                                   ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], dep)) / \
                                   ((dx2 + ACCESS_MESH(mesh, neighbors[n][X], neighbors[n][Y], sum)) * C);
-        // temp_mesh[_x][_y].dep += (mesh[neighbors[n][X]][neighbors[n][Y]].avg*dt2 * \
-        //                           mesh[neighbors[n][X]][neighbors[n][Y]].dep) / \
-        //                           ((dx2 + mesh[neighbors[n][X]][neighbors[n][Y]].sum) * C);
-      }
+       }
     } // _y loop
 
   } // _x loop
+#ifdef USE_CALI
+CALI_MARK_END("computation");
+#endif
   } // parallel region
 
 } // do time step
@@ -466,7 +468,7 @@ CALI_CXX_MARK_FUNCTION;
   printf("free_mesh.......\n"); fflush(stdout);
   wall_free_start = omp_get_wtime();
   free_mesh(main_mesh, x_size, y_size);
-  free_mesh(temp_mesh, TEMP_ROWS, y_size);
+  free_mesh(temp_mesh, x_size, y_size);
   wall_free_end = omp_get_wtime();
   printf("%fs\n", (wall_free_end - wall_free_start));
 
@@ -481,7 +483,6 @@ CALI_CXX_MARK_FUNCTION;
 int main(int argc, char **argv) {
 
 #ifdef USE_CALI
-CALI_CXX_MARK_FUNCTION;
 cali_id_t thread_attr = cali_create_attribute("thread_id", CALI_TYPE_INT, CALI_ATTR_ASVALUE | CALI_ATTR_SKIP_EVENTS);
 #pragma omp parallel
 {
